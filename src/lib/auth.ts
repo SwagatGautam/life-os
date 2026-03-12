@@ -12,7 +12,7 @@ const credentialsSchema = z.object({
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(db),
+  adapter: PrismaAdapter(db) as any,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/auth/signin",
@@ -42,20 +42,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const valid = await bcrypt.compare(parsed.data.password, user.password);
         if (!valid) return null;
 
-        return user;
+        return user as any;
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.id = user.id;
+        const dbUser = await db.user.findUnique({ where: { id: user.id } }) as any;
+        if (dbUser) {
+          token.id = dbUser.id;
+          token.role = dbUser.role;
+          token.plan = dbUser.plan;
+        }
+      }
+      if (trigger === "update" && session?.plan) {
+        token.plan = session.plan;
       }
       return token;
     },
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.id as string;
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.plan = token.plan;
       }
       return session;
     },

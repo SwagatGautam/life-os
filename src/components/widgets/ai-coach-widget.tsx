@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Send, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { fetcher } from "@/lib/api";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
+import { cn } from "@/lib/utils";
 
 const QUICK_PROMPTS = [
   "Summarize my week",
@@ -14,12 +16,20 @@ const QUICK_PROMPTS = [
 ];
 
 export function AICoachWidget() {
+  const { data: session } = useSession();
   const [messages, setMessages] = useState<{ role: "user" | "ai"; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
+  const isPro = (session?.user as any)?.plan === "PRO" || (session?.user as any)?.plan === "ENTERPRISE";
+
   const sendMessage = async (text?: string) => {
+    if (!isPro) {
+      toast.error("Please upgrade to Pro to use the AI Coach");
+      return;
+    }
+
     const msg = text || input.trim();
     if (!msg) return;
     
@@ -45,101 +55,117 @@ export function AICoachWidget() {
   };
 
   return (
-    <div className="widget-card">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/20 flex items-center justify-center">
-            <Sparkles size={16} className="text-purple-400" />
+    <div className="widget-card relative overflow-hidden group">
+      {!isPro && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center backdrop-blur-[2px] bg-background/40 group-hover:backdrop-blur-[4px] transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center mb-3">
+            <Sparkles size={24} className="text-primary" />
           </div>
-          <div>
-            <h3 className="font-semibold text-sm">AI Coach</h3>
-            <p className="text-[11px] text-muted-foreground">Context-aware productivity assistant</p>
+          <h4 className="font-bold text-sm mb-1">PRO Feature</h4>
+          <p className="text-[10px] text-muted-foreground mb-4 max-w-[180px]">Get context-aware advice from your personal productivity coach.</p>
+          <a href="/pricing" className="px-4 py-1.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-lg hover:opacity-90 transition-all">
+            Upgrade Now
+          </a>
+        </div>
+      )}
+
+      <div className={cn("transition-all duration-300", !isPro && "blur-[1px] opacity-40")}>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/20 flex items-center justify-center">
+              <Sparkles size={16} className="text-purple-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm">AI Coach</h3>
+              <p className="text-[11px] text-muted-foreground">Context-aware productivity assistant</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-[10px] text-green-400">Online</span>
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="ml-2 text-muted-foreground hover:text-foreground"
+            >
+              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-[10px] text-green-400">Online</span>
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="ml-2 text-muted-foreground hover:text-foreground"
-          >
-            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+
+        {/* Quick prompts */}
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {QUICK_PROMPTS.map((p) => (
+            <button
+              key={p}
+              onClick={() => sendMessage(p)}
+              className="text-[11px] px-2.5 py-1 rounded-full border border-border/50 hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-purple-400 transition-all disabled:opacity-50"
+              disabled={loading || !isPro}
+            >
+              {p}
+            </button>
+          ))}
         </div>
-      </div>
 
-      {/* Quick prompts */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {QUICK_PROMPTS.map((p) => (
-          <button
-            key={p}
-            onClick={() => sendMessage(p)}
-            className="text-[11px] px-2.5 py-1 rounded-full border border-border/50 hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-purple-400 transition-all disabled:opacity-50"
-            disabled={loading}
-          >
-            {p}
-          </button>
-        ))}
-      </div>
-
-      {/* Chat */}
-      <AnimatePresence>
-        {expanded && messages.length > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-3 mb-3 pr-1">
-              {messages.map((msg, i) => (
-                <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  {msg.role === "ai" && (
-                    <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+        {/* Chat */}
+        <AnimatePresence>
+          {expanded && messages.length > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-3 mb-3 pr-1">
+                {messages.map((msg, i) => (
+                  <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    {msg.role === "ai" && (
+                      <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Sparkles size={10} className="text-purple-400" />
+                      </div>
+                    )}
+                    <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                      msg.role === "user"
+                        ? "bg-primary/20 text-primary-foreground"
+                        : "bg-secondary/60 text-foreground"
+                    }`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <div className="flex gap-2">
+                    <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
                       <Sparkles size={10} className="text-purple-400" />
                     </div>
-                  )}
-                  <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
-                    msg.role === "user"
-                      ? "bg-primary/20 text-primary-foreground"
-                      : "bg-secondary/60 text-foreground"
-                  }`}>
-                    {msg.text}
+                    <div className="bg-secondary/60 rounded-xl px-3 py-2">
+                      <Loader2 size={12} className="animate-spin text-purple-400" />
+                    </div>
                   </div>
-                </div>
-              ))}
-              {loading && (
-                <div className="flex gap-2">
-                  <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                    <Sparkles size={10} className="text-purple-400" />
-                  </div>
-                  <div className="bg-secondary/60 rounded-xl px-3 py-2">
-                    <Loader2 size={12} className="animate-spin text-purple-400" />
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      {/* Input */}
-      <div className="flex gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Ask about your productivity, goals, patterns..."
-          className="flex-1 bg-secondary/50 border border-border rounded-xl px-3 py-2 text-xs outline-none focus:border-purple-500/30 focus:ring-1 focus:ring-purple-500/20 placeholder:text-muted-foreground transition-all"
-        />
-        <button
-          onClick={() => sendMessage()}
-          disabled={!input.trim() || loading}
-          className="w-9 h-9 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 flex items-center justify-center disabled:opacity-40 transition-all flex-shrink-0"
-        >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-        </button>
+        {/* Input */}
+        <div className="flex gap-2">
+          <input
+            value={input}
+            disabled={!isPro}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            placeholder={isPro ? "Ask about your productivity..." : "Unlock Pro to ask Coach"}
+            className="flex-1 bg-secondary/50 border border-border rounded-xl px-3 py-2 text-xs outline-none focus:border-purple-500/30 focus:ring-1 focus:ring-purple-500/20 placeholder:text-muted-foreground transition-all"
+          />
+          <button
+            onClick={() => sendMessage()}
+            disabled={!input.trim() || loading || !isPro}
+            className="w-9 h-9 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 flex items-center justify-center disabled:opacity-40 transition-all flex-shrink-0"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          </button>
+        </div>
       </div>
     </div>
   );
