@@ -12,18 +12,36 @@ import { cn } from "@/lib/utils";
 import type { User as NextAuthUser } from "next-auth";
 import { useDashboardStore } from "@/store/dashboard-store";
 
-const NOTIFS = [
-  { id: 1, text: "3-day coding streak! 🔥", time: "2m ago", unread: true },
-  { id: 2, text: "Goal 'Ship MVP' is 80% complete", time: "1h ago", unread: true },
-  { id: 3, text: "Weekly report ready", time: "3h ago", unread: false },
-];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetcher } from "@/lib/api";
+import { formatDistanceToNow } from "date-fns";
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
 
 export function TopNav({ user }: { user: NextAuthUser }) {
+  const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
   const { openCommandPalette } = useDashboardStore();
   const [showNotifs, setShowNotifs] = useState(false);
   const [showUser, setShowUser] = useState(false);
-  const unreadCount = NOTIFS.filter((n) => n.unread).length;
+
+  const { data: notifications = [] } = useQuery<Notification[]>({
+    queryKey: ["notifications"],
+    queryFn: () => fetcher("/api/notifications"),
+  });
+
+  const markRead = useMutation({
+    mutationFn: (id: string) => fetcher("/api/notifications", { method: "PATCH", body: JSON.stringify({ id, read: true }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <header className="h-14 flex items-center gap-3 px-4 md:px-6 border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
@@ -81,18 +99,32 @@ export function TopNav({ user }: { user: NextAuthUser }) {
               >
                 <div className="p-3 border-b border-border flex items-center justify-between">
                   <h3 className="text-sm font-semibold">Notifications</h3>
-                  <button className="text-xs text-primary hover:underline">Mark all read</button>
+                  <button 
+                    onClick={() => markRead.mutate("all")}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Mark all read
+                  </button>
                 </div>
-                <div className="divide-y divide-border/50">
-                  {NOTIFS.map((n) => (
-                    <div key={n.id} className={cn("p-3 flex items-start gap-2 hover:bg-secondary/50 cursor-pointer transition-colors", n.unread && "bg-primary/5")}>
-                      {n.unread && <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />}
-                      <div className={cn("flex-1", !n.unread && "ml-3.5")}>
-                        <p className="text-sm">{n.text}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{n.time}</p>
+                <div className="divide-y divide-border/50 max-h-96 overflow-y-auto custom-scrollbar">
+                  {notifications.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-muted-foreground">No notifications</div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div 
+                        key={n.id} 
+                        onClick={() => !n.read && markRead.mutate(n.id)}
+                        className={cn("p-3 flex items-start gap-2 hover:bg-secondary/50 cursor-pointer transition-colors", !n.read && "bg-primary/5")}
+                      >
+                        {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />}
+                        <div className={cn("flex-1", n.read && "ml-3.5")}>
+                          <p className="text-sm font-medium">{n.title}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+                          <p className="text-[10px] text-muted-foreground/60 mt-1">{formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </motion.div>
             )}

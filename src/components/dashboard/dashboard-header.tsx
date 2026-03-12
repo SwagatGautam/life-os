@@ -2,8 +2,11 @@
 
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { Zap, TrendingUp, Coffee, Flame } from "lucide-react";
+import { Zap, TrendingUp, Coffee, Flame, Loader2 } from "lucide-react";
 import type { User } from "next-auth";
+import { useQuery } from "@tanstack/react-query";
+import { fetcher } from "@/lib/api";
+import { useMemo } from "react";
 
 const QUOTES = [
   "Ship it. Then iterate.",
@@ -32,7 +35,24 @@ function getGreeting(): string {
 }
 
 export function DashboardHeader({ user }: { user: User }) {
-  const score = 73; // This would come from real data
+  const { data: analytics = [], isLoading } = useQuery<any[]>({
+    queryKey: ["analytics"],
+    queryFn: () => fetcher("/api/analytics"),
+  });
+
+  const { score, streak, tasksToday } = useMemo(() => {
+    if (analytics.length === 0) return { score: 40, streak: 0, tasksToday: 0 };
+    
+    const latest = analytics[0]; // Assuming descending sort from API
+    const s = Math.min(100, Math.round((latest.codingHours / 4) * 50 + (latest.tasksCompleted / 5) * 50));
+    
+    return {
+      score: s || 40,
+      streak: analytics.length,
+      tasksToday: latest.tasksCompleted || 0,
+    };
+  }, [analytics]);
+
   const quote = QUOTES[new Date().getDay() % QUOTES.length];
   const greeting = getGreeting();
   const firstName = user.name?.split(" ")[0] ?? "Developer";
@@ -70,39 +90,42 @@ export function DashboardHeader({ user }: { user: User }) {
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 border border-border/50">
             <Flame size={14} className="text-orange-400" />
             <span className="text-xs text-muted-foreground">Streak</span>
-            <span className="text-sm font-bold">7d</span>
+            <span className="text-sm font-bold">{streak}d</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 border border-border/50">
             <TrendingUp size={14} className="text-green-400" />
             <span className="text-xs text-muted-foreground">Tasks</span>
-            <span className="text-sm font-bold">12</span>
+            <span className="text-sm font-bold">{tasksToday}</span>
           </div>
         </div>
 
         {/* Momentum ring */}
         <div className="relative flex items-center justify-center">
-          <svg width="72" height="72" className="-rotate-90">
-            <circle
-              cx="36" cy="36" r="30"
-              fill="none"
-              stroke="hsl(var(--border))"
-              strokeWidth="5"
-            />
-            <circle
-              cx="36" cy="36" r="30"
-              fill="none"
-              stroke={color}
-              strokeWidth="5"
-              strokeLinecap="round"
-              strokeDasharray={`${2 * Math.PI * 30}`}
-              strokeDashoffset={`${2 * Math.PI * 30 * (1 - score / 100)}`}
-              style={{ filter: `drop-shadow(0 0 6px ${color})` }}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <Zap size={12} style={{ color }} />
-            <span className="text-xs font-bold leading-none" style={{ color }}>{score}</span>
-          </div>
+          {isLoading ? (
+            <div className="w-[72px] h-[72px] flex items-center justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              <svg width="72" height="72" className="-rotate-90">
+                <circle cx="36" cy="36" r="30" fill="none" stroke="hsl(var(--border))" strokeWidth="5" />
+                <motion.circle
+                  cx="36" cy="36" r="30"
+                  fill="none" stroke={color}
+                  strokeWidth="5" strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 30}`}
+                  initial={{ strokeDashoffset: 2 * Math.PI * 30 }}
+                  animate={{ strokeDashoffset: 2 * Math.PI * 30 * (1 - score / 100) }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  style={{ filter: `drop-shadow(0 0 6px ${color}80)` }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <Zap size={12} style={{ color }} />
+                <span className="text-xs font-bold leading-none" style={{ color }}>{score}</span>
+              </div>
+            </>
+          )}
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Momentum</p>

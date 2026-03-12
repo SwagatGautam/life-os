@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { User } from "next-auth";
+import { useDashboardStore } from "@/store/dashboard-store";
 
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", color: "#00d4ff" },
@@ -28,7 +29,7 @@ const NAV_ITEMS = [
 
 export function Sidebar({ user }: { user: User }) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const { sidebarCollapsed: collapsed, setSidebarCollapsed: setCollapsed, openModal } = useDashboardStore();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const SidebarContent = () => (
@@ -59,11 +60,14 @@ export function Sidebar({ user }: { user: User }) {
 
       {/* Quick add */}
       <div className={cn("p-3", collapsed && "px-2")}>
-        <button className={cn(
-          "flex items-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-          "bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary",
-          collapsed ? "justify-center px-0" : "px-3"
-        )}>
+        <button 
+          onClick={() => openModal("task")}
+          className={cn(
+            "flex items-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+            "bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary",
+            collapsed ? "justify-center px-0" : "px-3"
+          )}
+        >
           <Plus size={16} />
           <AnimatePresence>
             {!collapsed && (
@@ -197,23 +201,25 @@ export function Sidebar({ user }: { user: User }) {
       </AnimatePresence>
 
       {/* Desktop sidebar */}
-      <motion.aside
-        animate={{ width: collapsed ? 64 : 220 }}
-        transition={{ duration: 0.2 }}
-        className="hidden md:flex flex-col flex-shrink-0 h-full bg-card/50 border-r border-border/50 relative overflow-hidden"
-      >
-        <SidebarContent />
+      <div className="hidden md:flex relative h-full">
+        <motion.aside
+          animate={{ width: collapsed ? 64 : 220 }}
+          transition={{ duration: 0.2 }}
+          className="flex flex-col flex-shrink-0 h-full bg-card/50 border-r border-border/50 relative overflow-hidden"
+        >
+          <SidebarContent />
+        </motion.aside>
 
         {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute top-5 -right-3 w-6 h-6 bg-card border border-border rounded-full flex items-center justify-center hover:bg-secondary transition-colors z-10"
+          className="absolute top-5 -right-3 w-6 h-6 bg-card border border-border rounded-full flex items-center justify-center hover:bg-secondary transition-colors z-50 shadow-sm"
         >
           <motion.div animate={{ rotate: collapsed ? 180 : 0 }}>
             <ChevronLeft size={12} />
           </motion.div>
         </button>
-      </motion.aside>
+      </div>
     </>
   );
 }

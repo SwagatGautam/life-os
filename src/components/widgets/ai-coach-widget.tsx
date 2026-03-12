@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Send, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { fetcher } from "@/lib/api";
+import { toast } from "sonner";
 
 const QUICK_PROMPTS = [
   "Summarize my week",
@@ -10,11 +12,6 @@ const QUICK_PROMPTS = [
   "Analyze my productivity patterns",
   "Give me a motivational boost",
 ];
-
-const SAMPLE_RESPONSES: Record<string, string> = {
-  "Summarize my week": `**This week in numbers:**\n\n🔥 **Coding**: 34h total, 7-day streak maintained\n✅ **Tasks**: 23 completed, 4 in-progress\n🎯 **Goals**: MVP at 80% — you're crushing it!\n📚 **Reading**: 67 pages read (on track for yearly goal)\n💪 **Gym**: 4/5 workouts completed\n\n**Highlight**: Your longest uninterrupted coding block was 3.5h on Thursday — your peak performance window.\n\n**Next week focus**: Push MVP to 100% and start reading "Clean Architecture".`,
-  "What should I focus on tomorrow?": `Based on your current momentum:\n\n1. **🚀 Ship the drawer navigation feature** — it's 80% done and blocking your MVP milestone\n2. **📚 Read 30 pages** of The Pragmatic Programmer — you're behind your weekly target\n3. **🏋️ Do your workout** — you've skipped 2 days, don't break the streak\n\n💡 Pro tip: Block 2-4 PM for deep work on the feature — that's your highest-focus window.`,
-};
 
 export function AICoachWidget() {
   const [messages, setMessages] = useState<{ role: "user" | "ai"; text: string }[]>([]);
@@ -25,19 +22,26 @@ export function AICoachWidget() {
   const sendMessage = async (text?: string) => {
     const msg = text || input.trim();
     if (!msg) return;
+    
+    const newMessages = [...messages, { role: "user" as const, text: msg }];
+    setMessages(newMessages);
     setInput("");
     setLoading(true);
     setExpanded(true);
 
-    setMessages((prev) => [...prev, { role: "user", text: msg }]);
+    try {
+      const response = await fetcher<{ text: string }>("/api/ai/coach", {
+        method: "POST",
+        body: JSON.stringify({ messages: newMessages }),
+      });
 
-    // Simulated AI response — replace with real OpenAI call
-    await new Promise((r) => setTimeout(r, 1200));
-    const response = SAMPLE_RESPONSES[msg] ||
-      "I've analyzed your dashboard data. You're making great progress! Your coding streak is impressive. Focus on completing your top 3 tasks today and keep the momentum going. 🚀";
-
-    setMessages((prev) => [...prev, { role: "ai", text: response }]);
-    setLoading(false);
+      setMessages((prev) => [...prev, { role: "ai", text: response.text }]);
+    } catch (error) {
+      toast.error("Coach is temporarily unavailable");
+      setMessages((prev) => [...prev, { role: "ai", text: "Sorry, I'm having trouble thinking right now. Please try again later!" }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -50,7 +54,7 @@ export function AICoachWidget() {
           </div>
           <div>
             <h3 className="font-semibold text-sm">AI Coach</h3>
-            <p className="text-[11px] text-muted-foreground">Powered by your data + GPT-4</p>
+            <p className="text-[11px] text-muted-foreground">Context-aware productivity assistant</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -71,7 +75,8 @@ export function AICoachWidget() {
           <button
             key={p}
             onClick={() => sendMessage(p)}
-            className="text-[11px] px-2.5 py-1 rounded-full border border-border/50 hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-purple-400 transition-all"
+            className="text-[11px] px-2.5 py-1 rounded-full border border-border/50 hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-purple-400 transition-all disabled:opacity-50"
+            disabled={loading}
           >
             {p}
           </button>

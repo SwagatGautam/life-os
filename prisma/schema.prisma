@@ -34,6 +34,7 @@ model User {
   participants Participant[]
   messages     Message[]
   analytics    Analytics[]
+  notifications Notification[]
   githubToken  String?
   githubUsername String?
   spotifyToken String?
@@ -319,4 +320,15 @@ model Analytics {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

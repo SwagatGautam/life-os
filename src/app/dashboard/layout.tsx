@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopNav } from "@/components/layout/top-nav";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { GlobalModals } from "@/components/modals/global-modals";
 
 export default async function DashboardLayout({
   children,
@@ -22,6 +23,7 @@ export default async function DashboardLayout({
         </main>
       </div>
       <CommandPalette />
+      <GlobalModals />
     </div>
   );
 }

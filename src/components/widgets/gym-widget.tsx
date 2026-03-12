@@ -1,28 +1,63 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Dumbbell, Plus, TrendingUp, Zap } from "lucide-react";
+import { Dumbbell, Plus, Zap, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { format, subDays } from "date-fns";
+import { format, subDays, isSameWeek, startOfWeek } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
+import { fetcher } from "@/lib/api";
+import { useMemo } from "react";
 
-const RECENT_WORKOUTS = [
-  { name: "Push Day", date: "Today", exercises: 6, duration: 65, type: "strength" },
-  { name: "Cardio HIIT", date: "Yesterday", exercises: 4, duration: 30, type: "cardio" },
-  { name: "Pull Day", date: "2d ago", exercises: 7, duration: 70, type: "strength" },
-];
+interface Exercise {
+  name: string;
+  sets: any;
+}
 
-const WEEKLY_VOLUME = Array.from({ length: 7 }, (_, i) => ({
-  day: format(subDays(new Date(), 6 - i), "EEE"),
-  sets: [0, 12, 0, 18, 8, 0, 22][i],
-}));
-
-const PRs = [
-  { exercise: "Bench Press", weight: "100kg", date: "2d ago" },
-  { exercise: "Deadlift", weight: "140kg", date: "1w ago" },
-  { exercise: "Squat", weight: "120kg", date: "3d ago" },
-];
+interface Workout {
+  id: string;
+  name: string;
+  date: string;
+  duration: number;
+  exercises: Exercise[];
+}
 
 export function GymWidget() {
+  const { data: workouts = [], isLoading } = useQuery<Workout[]>({
+    queryKey: ["workouts"],
+    queryFn: () => fetcher("/api/gym/workouts"),
+  });
+
+  const { weeklyVolume, recentWorkouts, workoutCount } = useMemo(() => {
+    const sorted = [...workouts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Calculate weekly volume
+    const volumeData = Array.from({ length: 7 }, (_, i) => {
+      const day = subDays(new Date(), 6 - i);
+      const dayWorkouts = workouts.filter(w => format(new Date(w.date), "yyyy-MM-dd") === format(day, "yyyy-MM-dd"));
+      const sets = dayWorkouts.reduce((acc, w) => acc + (w.exercises?.length || 0) * 3, 0); // Estimate 3 sets per exercise if not tracked
+      return {
+        day: format(day, "EEE"),
+        sets,
+      };
+    });
+
+    const thisWeek = workouts.filter(w => isSameWeek(new Date(w.date), new Date()));
+
+    return {
+      weeklyVolume: volumeData,
+      recentWorkouts: sorted.slice(0, 3),
+      workoutCount: thisWeek.length,
+    };
+  }, [workouts]);
+
+  if (isLoading) {
+    return (
+      <div className="widget-card h-full flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="widget-card h-full">
       <div className="flex items-center justify-between mb-3">
@@ -32,7 +67,7 @@ export function GymWidget() {
           </div>
           <div>
             <h3 className="font-semibold text-sm">Gym Tracker</h3>
-            <p className="text-[11px] text-muted-foreground">4 workouts this week</p>
+            <p className="text-[11px] text-muted-foreground">{workoutCount} workouts this week</p>
           </div>
         </div>
         <button className="w-7 h-7 rounded-lg bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors">
@@ -42,9 +77,9 @@ export function GymWidget() {
 
       {/* Weekly volume chart */}
       <div className="h-16 mb-3">
-        <p className="text-[10px] text-muted-foreground mb-1">Weekly volume (sets)</p>
+        <p className="text-[10px] text-muted-foreground mb-1">Weekly volume (est. sets)</p>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={WEEKLY_VOLUME} barSize={12}>
+          <BarChart data={weeklyVolume} barSize={12}>
             <XAxis dataKey="day" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
             <Tooltip
               contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 11 }}
@@ -56,14 +91,17 @@ export function GymWidget() {
 
       {/* Recent workouts */}
       <div className="space-y-1.5 mb-3">
-        {RECENT_WORKOUTS.map((w) => (
-          <div key={w.name} className="flex items-center gap-2 bg-secondary/30 rounded-lg p-2">
-            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${w.type === "strength" ? "bg-pink-400" : "bg-orange-400"}`} />
+        {recentWorkouts.map((w) => (
+          <div key={w.id} className="flex items-center gap-2 bg-secondary/30 rounded-lg p-2">
+            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 bg-pink-400`} />
             <span className="text-xs font-medium flex-1 truncate">{w.name}</span>
-            <span className="text-[10px] text-muted-foreground">{w.date}</span>
+            <span className="text-[10px] text-muted-foreground">{format(new Date(w.date), "MMM d")}</span>
             <span className="text-[10px] text-muted-foreground">{w.duration}m</span>
           </div>
         ))}
+        {recentWorkouts.length === 0 && (
+          <p className="text-[10px] text-center text-muted-foreground py-2">No recent workouts.</p>
+        )}
       </div>
 
       {/* PRs */}
@@ -73,12 +111,7 @@ export function GymWidget() {
           <span className="text-[11px] font-semibold text-yellow-400">Recent PRs 🏆</span>
         </div>
         <div className="space-y-1">
-          {PRs.map((pr) => (
-            <div key={pr.exercise} className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">{pr.exercise}</span>
-              <span className="font-bold text-yellow-400">{pr.weight}</span>
-            </div>
-          ))}
+          <p className="text-[10px] text-muted-foreground">Log movements to see PRs here.</p>
         </div>
       </div>
     </div>

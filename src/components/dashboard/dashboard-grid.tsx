@@ -11,6 +11,7 @@ import { ReadingWidget } from "@/components/widgets/reading-widget";
 import { PomodoroWidget } from "@/components/widgets/pomodoro-widget";
 import { AnalyticsWidget } from "@/components/widgets/analytics-widget";
 import { AICoachWidget } from "@/components/widgets/ai-coach-widget";
+import { MeetingsWidget } from "@/components/widgets/meetings-widget";
 
 const WIDGETS = [
   { id: "coding", component: CodingWidget, cols: 2 },
@@ -18,6 +19,7 @@ const WIDGETS = [
   { id: "goals", component: GoalsWidget, cols: 1 },
   { id: "habits", component: HabitsWidget, cols: 1 },
   { id: "pomodoro", component: PomodoroWidget, cols: 1 },
+  { id: "meetings", component: MeetingsWidget, cols: 1 },
   { id: "finances", component: FinancesWidget, cols: 1 },
   { id: "gym", component: GymWidget, cols: 1 },
   { id: "reading", component: ReadingWidget, cols: 1 },

@@ -1,72 +1,96 @@
 "use client";
 
 import { useState } from "react";
-import { motion, Reorder } from "framer-motion";
-import { CheckSquare, Plus, Flag, Circle, CheckCircle2, Clock, X } from "lucide-react";
+import { motion } from "framer-motion";
+import { CheckSquare, Plus, Flag, Circle, CheckCircle2, Clock, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetcher } from "@/lib/api";
+import { toast } from "sonner";
 
-type Priority = "low" | "medium" | "high" | "urgent";
-type Status = "todo" | "in_progress" | "done";
+type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+type Status = "TODO" | "IN_PROGRESS" | "DONE";
 
 interface Task {
   id: string;
   title: string;
   priority: Priority;
   status: Status;
-  tags?: string[];
+  tags: string[];
 }
 
-const MOCK_TASKS: Task[] = [
-  { id: "1", title: "Fix 422 error in API endpoint", priority: "urgent", status: "todo", tags: ["bug"] },
-  { id: "2", title: "Implement drawer navigation", priority: "high", status: "in_progress", tags: ["feat"] },
-  { id: "3", title: "Write unit tests for auth", priority: "medium", status: "todo", tags: ["test"] },
-  { id: "4", title: "Update README with deploy guide", priority: "low", status: "done" },
-  { id: "5", title: "Design new dashboard layout", priority: "high", status: "in_progress", tags: ["design"] },
-  { id: "6", title: "Set up CI/CD pipeline", priority: "medium", status: "todo" },
-];
-
 const PRIORITY_CONFIG: Record<Priority, { label: string; color: string }> = {
-  urgent: { label: "Urgent", color: "#ff2d78" },
-  high: { label: "High", color: "#ff6b35" },
-  medium: { label: "Medium", color: "#00d4ff" },
-  low: { label: "Low", color: "#a855f7" },
+  URGENT: { label: "Urgent", color: "#ff2d78" },
+  HIGH: { label: "High", color: "#ff6b35" },
+  MEDIUM: { label: "Medium", color: "#00d4ff" },
+  LOW: { label: "Low", color: "#a855f7" },
 };
 
 const COLUMNS: { id: Status; label: string; color: string }[] = [
-  { id: "todo", label: "To Do", color: "#a855f7" },
-  { id: "in_progress", label: "In Progress", color: "#00d4ff" },
-  { id: "done", label: "Done", color: "#00ff88" },
+  { id: "TODO", label: "To Do", color: "#a855f7" },
+  { id: "IN_PROGRESS", label: "In Progress", color: "#00d4ff" },
+  { id: "DONE", label: "Done", color: "#00ff88" },
 ];
 
 export function TasksWidget() {
-  const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
+  const queryClient = useQueryClient();
   const [addingTo, setAddingTo] = useState<Status | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
 
+  const { data: tasks = [], isLoading } = useQuery<Task[]>({
+    queryKey: ["tasks"],
+    queryFn: () => fetcher("/api/tasks"),
+  });
+
+  const createTask = useMutation({
+    mutationFn: (data: Partial<Task>) => fetcher("/api/tasks", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("Task created");
+    },
+  });
+
+  const updateTask = useMutation({
+    mutationFn: ({ id, ...data }: Partial<Task> & { id: string }) => 
+      fetcher(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+    },
+  });
+
+  const deleteTask = useMutation({
+    mutationFn: (id: string) => fetcher(`/api/tasks/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("Task deleted");
+    },
+  });
+
   const getColumnTasks = (status: Status) => tasks.filter((t) => t.status === status);
 
-  const moveTask = (id: string, newStatus: Status) => {
-    setTasks((prev) => prev.map((t) => t.id === id ? { ...t, status: newStatus } : t));
-  };
-
-  const addTask = (status: Status) => {
+  const handleAddTask = (status: Status) => {
     if (!newTaskTitle.trim()) return;
-    setTasks((prev) => [...prev, {
-      id: Math.random().toString(36).slice(2),
-      title: newTaskTitle.trim(),
-      priority: "medium",
-      status,
-    }]);
+    createTask.mutate({ title: newTaskTitle.trim(), status });
     setNewTaskTitle("");
     setAddingTo(null);
   };
 
-  const removeTask = (id: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+  const toggleTaskStatus = (task: Task) => {
+    const newStatus: Status = task.status === "DONE" ? "TODO" : "DONE";
+    updateTask.mutate({ id: task.id, status: newStatus });
   };
 
-  const todoCount = getColumnTasks("todo").length;
-  const doneCount = getColumnTasks("done").length;
+  if (isLoading) {
+    return (
+      <div className="widget-card h-full flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const doneCount = getColumnTasks("DONE").length;
+  const todoCount = getColumnTasks("TODO").length;
 
   return (
     <div className="widget-card h-full">
@@ -113,20 +137,20 @@ export function TasksWidget() {
                 >
                   <div className="flex items-start gap-1.5">
                     <button
-                      onClick={() => moveTask(task.id, col.id === "done" ? "todo" : "done")}
+                      onClick={() => toggleTaskStatus(task)}
                       className="mt-0.5 flex-shrink-0"
                     >
-                      {col.id === "done" ? (
+                      {task.status === "DONE" ? (
                         <CheckCircle2 size={12} className="text-green-400" />
                       ) : (
                         <Circle size={12} className="text-muted-foreground/50 hover:text-primary" />
                       )}
                     </button>
-                    <p className={cn("text-xs leading-tight flex-1", col.id === "done" && "line-through text-muted-foreground")}>
+                    <p className={cn("text-xs leading-tight flex-1", task.status === "DONE" && "line-through text-muted-foreground")}>
                       {task.title}
                     </p>
                     <button
-                      onClick={() => removeTask(task.id)}
+                      onClick={() => deleteTask.mutate(task.id)}
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <X size={10} className="text-muted-foreground hover:text-destructive" />
@@ -154,14 +178,20 @@ export function TasksWidget() {
                     value={newTaskTitle}
                     onChange={(e) => setNewTaskTitle(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") addTask(col.id);
+                      if (e.key === "Enter") handleAddTask(col.id);
                       if (e.key === "Escape") { setAddingTo(null); setNewTaskTitle(""); }
                     }}
                     placeholder="Task title..."
                     className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
                   />
                   <div className="flex gap-1 mt-1.5">
-                    <button onClick={() => addTask(col.id)} className="text-[10px] bg-primary/20 text-primary rounded px-1.5 py-0.5">Add</button>
+                    <button 
+                      onClick={() => handleAddTask(col.id)} 
+                      disabled={createTask.isPending}
+                      className="text-[10px] bg-primary/20 text-primary rounded px-1.5 py-0.5 disabled:opacity-50"
+                    >
+                      {createTask.isPending ? "Adding..." : "Add"}
+                    </button>
                     <button onClick={() => { setAddingTo(null); setNewTaskTitle(""); }} className="text-[10px] text-muted-foreground">Cancel</button>
                   </div>
                 </div>
@@ -185,13 +215,13 @@ export function TasksWidget() {
           <span className="text-xs font-semibold text-primary">Today&apos;s Focus</span>
         </div>
         <div className="space-y-1">
-          {getColumnTasks("in_progress").slice(0, 3).map((task) => (
+          {getColumnTasks("IN_PROGRESS").slice(0, 3).map((task) => (
             <div key={task.id} className="flex items-center gap-2 text-xs">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
               <span className="truncate">{task.title}</span>
             </div>
           ))}
-          {getColumnTasks("in_progress").length === 0 && (
+          {getColumnTasks("IN_PROGRESS").length === 0 && (
             <p className="text-xs text-muted-foreground">No tasks in progress</p>
           )}
         </div>

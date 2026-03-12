@@ -12,6 +12,11 @@ interface DashboardStore {
   activeWidgets: string[];
   toggleWidget: (id: string) => void;
 
+  // Modal Management
+  activeModal: "task" | "goal" | "habit" | "finance" | "gym" | "reading" | "note" | "meeting" | null;
+  openModal: (modal: "task" | "goal" | "habit" | "finance" | "gym" | "reading" | "note" | "meeting" | null) => void;
+  closeModal: () => void;
+
   pomodoroRunning: boolean;
   pomodoroMinutes: number;
   pomodoroSeconds: number;
@@ -43,6 +48,10 @@ export const useDashboardStore = create<DashboardStore>()(
             ? state.activeWidgets.filter((w) => w !== id)
             : [...state.activeWidgets, id],
         })),
+
+      activeModal: null,
+      openModal: (modal) => set({ activeModal: modal }),
+      closeModal: () => set({ activeModal: null }),
 
       pomodoroRunning: false,
       pomodoroMinutes: 25,

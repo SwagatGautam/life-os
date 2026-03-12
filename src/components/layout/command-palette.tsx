@@ -40,7 +40,7 @@ const COMMANDS = [
 
 export function CommandPalette() {
   const router = useRouter();
-  const { commandPaletteOpen, setCommandPaletteOpen } = useDashboardStore();
+  const { commandPaletteOpen, setCommandPaletteOpen, openModal } = useDashboardStore();
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -55,13 +55,22 @@ export function CommandPalette() {
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, [setCommandPaletteOpen]);
-
+ 
   const handleSelect = (item: { href?: string; action?: string }) => {
     setCommandPaletteOpen(false);
     if (item.href) {
       router.push(item.href);
     }
-    // Actions handled by store/events
+    
+    if (item.action) {
+      switch(item.action) {
+        case "new-task": openModal("task"); break;
+        case "new-goal": openModal("goal"); break;
+        case "new-habit": openModal("habit"); break;
+        case "new-meeting": openModal("meeting"); break;
+        case "new-note": openModal("note"); break;
+      }
+    }
   };
 
   return (

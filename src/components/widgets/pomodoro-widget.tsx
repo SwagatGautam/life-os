@@ -1,19 +1,26 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Play, Pause, RotateCcw, SkipForward, Coffee, Brain } from "lucide-react";
+import { motion } from "framer-motion";
+import { Play, Pause, RotateCcw, SkipForward, Coffee, Brain, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { fetcher } from "@/lib/api";
 
-const MODES = [
-  { id: "work", label: "Focus", minutes: 25, color: "#00d4ff", icon: Brain },
-  { id: "break", label: "Break", minutes: 5, color: "#00ff88", icon: Coffee },
-  { id: "long", label: "Long Break", minutes: 15, color: "#a855f7", icon: Coffee },
-] as const;
-
-type Mode = (typeof MODES)[number]["id"];
+type Mode = "work" | "break" | "long";
 
 export function PomodoroWidget() {
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => fetcher<any>("/api/settings"),
+  });
+
+  const MODES = [
+    { id: "work", label: "Focus", minutes: settings?.pomodoroWork || 25, color: "#00d4ff", icon: Brain },
+    { id: "break", label: "Break", minutes: settings?.pomodoroBreak || 5, color: "#00ff88", icon: Coffee },
+    { id: "long", label: "Long Break", minutes: settings?.pomodoroLong || 15, color: "#a855f7", icon: Coffee },
+  ] as const;
+
   const [mode, setMode] = useState<Mode>("work");
   const [running, setRunning] = useState(false);
   const [seconds, setSeconds] = useState(25 * 60);
@@ -24,12 +31,18 @@ export function PomodoroWidget() {
   const totalSeconds = currentMode.minutes * 60;
   const progress = (seconds / totalSeconds) * 100;
 
+  // Update seconds when settings load
+  useEffect(() => {
+    if (settings && !running) {
+      setSeconds((MODES.find(m => m.id === mode)?.minutes || 25) * 60);
+    }
+  }, [settings, mode]);
+
   const tick = useCallback(() => {
     setSeconds((s) => {
       if (s <= 1) {
         setRunning(false);
         setSessions((prev) => prev + 1);
-        // Play sound notification
         try {
           const ctx = new AudioContext();
           const osc = ctx.createOscillator();
@@ -67,6 +80,14 @@ export function PomodoroWidget() {
     setRunning(false);
     setSeconds(MODES.find((m) => m.id === newMode)!.minutes * 60);
   };
+
+  if (isLoading) {
+    return (
+      <div className="widget-card h-full flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const mins = Math.floor(seconds / 60).toString().padStart(2, "0");
   const secs = (seconds % 60).toString().padStart(2, "0");

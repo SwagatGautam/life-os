@@ -10,22 +10,25 @@ import {
 import { generateRoomCode, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetcher } from "@/lib/api";
+
 interface Meeting {
   id: string;
   title: string;
-  code: string;
-  scheduledAt?: Date;
+  roomCode: string;
+  scheduledAt?: string | null;
   participants: number;
   isActive: boolean;
 }
 
-const MOCK_MEETINGS: Meeting[] = [
-  { id: "1", title: "Team Standup", code: "ABC-DEF-GHI", scheduledAt: new Date(Date.now() + 3600000), participants: 4, isActive: false },
-  { id: "2", title: "Design Review", code: "XYZ-123-456", participants: 2, isActive: true },
-];
-
 export default function MeetingsPage() {
-  const [meetings, setMeetings] = useState<Meeting[]>(MOCK_MEETINGS);
+  const queryClient = useQueryClient();
+  const { data: meetings = [], isLoading } = useQuery<Meeting[]>({
+    queryKey: ["meetings"],
+    queryFn: () => fetcher("/api/meetings"),
+  });
+
   const [activeRoom, setActiveRoom] = useState<Meeting | null>(null);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -41,19 +44,19 @@ export default function MeetingsPage() {
     { id: 2, user: "Bob", text: "Ready to start!", time: "1m ago" },
   ]);
 
+  const createMutation = useMutation({
+    mutationFn: (data: { title: string }) => fetcher("/api/meetings", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setNewTitle("");
+      setCreating(false);
+      toast.success("Meeting created! Share the code to invite others.");
+    },
+  });
+
   const createMeeting = () => {
     if (!newTitle.trim()) return;
-    const m: Meeting = {
-      id: Math.random().toString(36).slice(2),
-      title: newTitle,
-      code: generateRoomCode(),
-      participants: 1,
-      isActive: false,
-    };
-    setMeetings((prev) => [m, ...prev]);
-    setNewTitle("");
-    setCreating(false);
-    toast.success("Meeting created! Share the code to invite others.");
+    createMutation.mutate({ title: newTitle });
   };
 
   const copyCode = (code: string) => {
@@ -62,6 +65,7 @@ export default function MeetingsPage() {
     setTimeout(() => setCopied(""), 2000);
     toast.success("Room code copied!");
   };
+
 
   const sendChat = () => {
     if (!chatMsg.trim()) return;
@@ -130,7 +134,7 @@ export default function MeetingsPage() {
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             <span className="text-white/70 text-sm font-medium">{activeRoom.title}</span>
-            <span className="text-white/40 text-xs">{activeRoom.code}</span>
+            <span className="text-white/40 text-xs">{activeRoom.roomCode}</span>
           </div>
           <div className="flex items-center gap-2">
             <Users size={14} className="text-white/40" />
@@ -292,13 +296,13 @@ export default function MeetingsPage() {
             <div className="bg-secondary/40 rounded-xl px-3 py-2 mb-3 flex items-center justify-between">
               <div>
                 <p className="text-[10px] text-muted-foreground">Room Code</p>
-                <p className="font-mono text-sm font-bold">{meeting.code}</p>
+                <p className="font-mono text-sm font-bold">{meeting.roomCode}</p>
               </div>
               <button
-                onClick={() => copyCode(meeting.code)}
+                onClick={() => copyCode(meeting.roomCode)}
                 className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
               >
-                {copied === meeting.code ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                {copied === meeting.roomCode ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
               </button>
             </div>
 
