@@ -57,28 +57,30 @@ export default function PricingPage() {
         body: JSON.stringify({ plan }),
       });
 
-      if (response.url) {
+      if (response.url && response.config) {
         // Create a hidden form and submit it to eSewa (POST)
         const form = document.createElement("form");
-        form.method = "POST";
-        form.action = response.url;
-        form.enctype = "application/x-www-form-urlencoded";
+        form.setAttribute("method", "POST");
+        form.setAttribute("action", response.url);
 
         Object.entries(response.config).forEach(([key, value]) => {
           const input = document.createElement("input");
-          input.type = "hidden";
-          input.name = key;
-          input.value = String(value);
+          input.setAttribute("type", "hidden");
+          input.setAttribute("name", key);
+          input.setAttribute("value", String(value));
           form.appendChild(input);
         });
 
         document.body.appendChild(form);
-        // Small delay to ensure DOM is settled
-        setTimeout(() => form.submit(), 100);
+        form.submit();
+        // Don't reset loading — the page is navigating away
+        return;
       }
+
+      toast.error("Invalid payment response");
+      setLoading(null);
     } catch (error) {
       toast.error("Could not initiate payment");
-    } finally {
       setLoading(null);
     }
   };
