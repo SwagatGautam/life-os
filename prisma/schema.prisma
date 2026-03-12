@@ -1,0 +1,322 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  tasks        Task[]
+  goals        Goal[]
+  habits       Habit[]
+  habitLogs    HabitLog[]
+  expenses     Expense[]
+  incomes      Income[]
+  budgets      Budget[]
+  workouts     Workout[]
+  books        Book[]
+  notes        Note[]
+  meetings     Meeting[]    @relation("MeetingHost")
+  participants Participant[]
+  messages     Message[]
+  analytics    Analytics[]
+  githubToken  String?
+  githubUsername String?
+  spotifyToken String?
+  settings     UserSettings?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model UserSettings {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  theme           String  @default("dark")
+  dashboardLayout Json?
+  pomodoroWork    Int     @default(25)
+  pomodoroBreak   Int     @default(5)
+  pomodoroLong    Int     @default(15)
+  weeklyGoal      Int     @default(40)
+  currency        String  @default("USD")
+  timezone        String  @default("UTC")
+  notifications   Boolean @default(true)
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  userId      String
+  title       String
+  description String?    @db.Text
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
+  dueDate     DateTime?
+  tags        String[]
+  githubIssue String?
+  position    Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Goal {
+  id          String     @id @default(cuid())
+  userId      String
+  title       String
+  description String?    @db.Text
+  category    String     @default("personal")
+  target      Float
+  current     Float      @default(0)
+  unit        String     @default("%")
+  deadline    DateTime?
+  completed   Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  milestones  Milestone[]
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Milestone {
+  id          String   @id @default(cuid())
+  goalId      String
+  title       String
+  completed   Boolean  @default(false)
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+  goal        Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+}
+
+model Habit {
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  icon        String     @default("✅")
+  color       String     @default("#6366f1")
+  frequency   String     @default("daily")
+  streak      Int        @default(0)
+  bestStreak  Int        @default(0)
+  createdAt   DateTime   @default(now())
+  logs        HabitLog[]
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HabitLog {
+  id        String   @id @default(cuid())
+  habitId   String
+  userId    String
+  date      DateTime @db.Date
+  completed Boolean  @default(true)
+  createdAt DateTime @default(now())
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  category    String
+  description String?
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Income {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  source      String
+  description String?
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Budget {
+  id        String   @id @default(cuid())
+  userId    String
+  category  String
+  limit     Float
+  month     Int
+  year      Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, month, year])
+}
+
+model Workout {
+  id        String     @id @default(cuid())
+  userId    String
+  name      String
+  date      DateTime   @default(now())
+  duration  Int        @default(0)
+  notes     String?    @db.Text
+  exercises Exercise[]
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Exercise {
+  id        String  @id @default(cuid())
+  workoutId String
+  name      String
+  sets      Json
+  notes     String?
+  workout   Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+}
+
+model Book {
+  id            String    @id @default(cuid())
+  userId        String
+  title         String
+  author        String
+  coverUrl      String?
+  totalPages    Int       @default(0)
+  currentPage   Int       @default(0)
+  status        BookStatus @default(WANT_TO_READ)
+  startDate     DateTime?
+  finishDate    DateTime?
+  rating        Int?
+  notes         String?   @db.Text
+  openLibraryId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum BookStatus {
+  WANT_TO_READ
+  READING
+  COMPLETED
+  ABANDONED
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  content   String   @db.Text
+  tags      String[]
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Meeting {
+  id           String        @id @default(cuid())
+  hostId       String
+  title        String
+  description  String?
+  roomCode     String        @unique
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  isActive     Boolean       @default(false)
+  maxParticipants Int        @default(8)
+  createdAt    DateTime      @default(now())
+  host         User          @relation("MeetingHost", fields: [hostId], references: [id], onDelete: Cascade)
+  participants Participant[]
+  messages     Message[]
+}
+
+model Participant {
+  id        String   @id @default(cuid())
+  meetingId String
+  userId    String
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  meetingId String
+  userId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Analytics {
+  id           String   @id @default(cuid())
+  userId       String
+  date         DateTime @db.Date
+  codingHours  Float    @default(0)
+  tasksCompleted Int    @default(0)
+  habitsCompleted Int   @default(0)
+  workoutsLogged Int    @default(0)
+  pagesRead    Int      @default(0)
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
